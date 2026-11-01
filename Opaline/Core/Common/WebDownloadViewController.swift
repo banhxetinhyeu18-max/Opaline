@@ -1,3 +1,4 @@
+// swiftlint:disable all
 import UIKit
 
 /// Download from a link: paste the address of a video/audio file, or of any

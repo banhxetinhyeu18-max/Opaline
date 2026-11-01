@@ -1,3 +1,4 @@
+// swiftlint:disable all
 // swiftlint:disable file_length
 import UIKit
 

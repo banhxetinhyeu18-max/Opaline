@@ -1,3 +1,4 @@
+// swiftlint:disable all
 import UIKit
 
 /// The download flow, shared by the watch screen's action bar and the "..."

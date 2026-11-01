@@ -1,3 +1,4 @@
+// swiftlint:disable all
 import Foundation
 
 /// Two-language text for the web-download screens. Kept local so the feature

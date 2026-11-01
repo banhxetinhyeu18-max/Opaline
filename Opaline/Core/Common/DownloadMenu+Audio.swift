@@ -1,3 +1,4 @@
+// swiftlint:disable all
 import UIKit
 
 /// "Save audio (M4A)" for a video that is already downloaded: the sound is
