@@ -69,6 +69,17 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
         + "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
 
+    static var folder: URL {
+        let base = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        )[0]
+        let url = base.appendingPathComponent("WebDownloads", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: url, withIntermediateDirectories: true
+        )
+        return url
+    }
+
     private var session: URLSession?
     private var task: URLSessionDownloadTask?
     private var fetcher: WebPageFetcher?
@@ -80,16 +91,74 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
     private var progress: ((Double) -> Void)?
     private var completion: ((Result<URL, Error>) -> Void)?
 
-    static var folder: URL {
-        let base = FileManager.default.urls(
-            for: .applicationSupportDirectory, in: .userDomainMask
-        )[0]
-        let url = base.appendingPathComponent("WebDownloads", isDirectory: true)
-        try? FileManager.default.createDirectory(
-            at: url, withIntermediateDirectories: true
-        )
-        return url
+    // MARK: - Static helpers
+
+    private static func isPlaylist(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ext == "m3u8" || ext == "mpd"
     }
+
+    /// Ordered by how reliable the source is: social-card meta tags, then
+    /// media elements, then any media URL that appears in the text.
+    static func mediaLinks(in raw: String, base: URL) -> [URL] {
+        let html = raw
+            .replacingOccurrences(of: "\\/", with: "/")
+            .replacingOccurrences(of: "\\u0026", with: "&")
+            .replacingOccurrences(of: "&amp;", with: "&")
+        let quoted = "[\"']([^\"']+)[\"']"
+        let patterns = [
+            "<meta[^>]+(?:property|name)=[\"'](?:og:video(?::secure_url|:url)?"
+                + "|og:audio|twitter:player:stream)[\"'][^>]+content=" + quoted,
+            "<meta[^>]+content=" + quoted + "[^>]+(?:property|name)=[\"']"
+                + "(?:og:video(?::secure_url|:url)?|og:audio|twitter:player:stream)[\"']",
+            "<(?:video|audio|source)[^>]+src=" + quoted,
+            "(https?://[^\"'\\s<>\\\\]+?\\.(?:mp4|m4v|mov|webm|mp3|m4a|aac|m3u8)"
+                + "(?:\\?[^\"'\\s<>\\\\]*)?)"
+        ]
+        var seen = Set<String>()
+        var result: [URL] = []
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(
+                pattern: pattern, options: [.caseInsensitive]
+            ) else {
+                continue
+            }
+            let range = NSRange(html.startIndex..., in: html)
+            for match in regex.matches(in: html, options: [], range: range)
+                where match.numberOfRanges > 1 {
+                guard let part = Range(match.range(at: 1), in: html),
+                      let url = URL(string: String(html[part]), relativeTo: base)?
+                          .absoluteURL,
+                      ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                      seen.insert(url.absoluteString).inserted else {
+                    continue
+                }
+                result.append(url)
+            }
+        }
+        return result
+    }
+
+    private static func fileExtension(forMime mime: String?) -> String {
+        switch (mime ?? "").lowercased() {
+        case "audio/mpeg", "audio/mp3":
+            return "mp3"
+        case "audio/mp4", "audio/x-m4a", "audio/aac":
+            return "m4a"
+        case "audio/wav", "audio/x-wav":
+            return "wav"
+        case "audio/ogg":
+            return "ogg"
+        case "video/webm":
+            return "webm"
+        case "video/quicktime":
+            return "mov"
+        default:
+            return "mp4"
+        }
+    }
+
+    // MARK: - Public API
 
     func start(
         link: String,
@@ -152,52 +221,6 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
             candidates = playable
             next()
         }
-    }
-
-    private static func isPlaylist(_ url: URL) -> Bool {
-        let ext = url.pathExtension.lowercased()
-        return ext == "m3u8" || ext == "mpd"
-    }
-
-    /// Ordered by how reliable the source is: social-card meta tags, then
-    /// media elements, then any media URL that appears in the text.
-    static func mediaLinks(in raw: String, base: URL) -> [URL] {
-        let html = raw
-            .replacingOccurrences(of: "\\/", with: "/")
-            .replacingOccurrences(of: "\\u0026", with: "&")
-            .replacingOccurrences(of: "&amp;", with: "&")
-        let quoted = "[\"']([^\"']+)[\"']"
-        let patterns = [
-            "<meta[^>]+(?:property|name)=[\"'](?:og:video(?::secure_url|:url)?"
-                + "|og:audio|twitter:player:stream)[\"'][^>]+content=" + quoted,
-            "<meta[^>]+content=" + quoted + "[^>]+(?:property|name)=[\"']"
-                + "(?:og:video(?::secure_url|:url)?|og:audio|twitter:player:stream)[\"']",
-            "<(?:video|audio|source)[^>]+src=" + quoted,
-            "(https?://[^\"'\\s<>\\\\]+?\\.(?:mp4|m4v|mov|webm|mp3|m4a|aac|m3u8)"
-                + "(?:\\?[^\"'\\s<>\\\\]*)?)"
-        ]
-        var seen = Set<String>()
-        var result: [URL] = []
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(
-                pattern: pattern, options: [.caseInsensitive]
-            ) else {
-                continue
-            }
-            let range = NSRange(html.startIndex..., in: html)
-            for match in regex.matches(in: html, options: [], range: range)
-                where match.numberOfRanges > 1 {
-                guard let part = Range(match.range(at: 1), in: html),
-                      let url = URL(string: String(html[part]), relativeTo: base)?
-                          .absoluteURL,
-                      ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
-                      seen.insert(url.absoluteString).inserted else {
-                    continue
-                }
-                result.append(url)
-            }
-        }
-        return result
     }
 
     // MARK: - Transfer
@@ -316,25 +339,6 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
             name += "." + Self.fileExtension(forMime: response.mimeType)
         }
         return String(name.suffix(100))
-    }
-
-    private static func fileExtension(forMime mime: String?) -> String {
-        switch (mime ?? "").lowercased() {
-        case "audio/mpeg", "audio/mp3":
-            return "mp3"
-        case "audio/mp4", "audio/x-m4a", "audio/aac":
-            return "m4a"
-        case "audio/wav", "audio/x-wav":
-            return "wav"
-        case "audio/ogg":
-            return "ogg"
-        case "video/webm":
-            return "webm"
-        case "video/quicktime":
-            return "mov"
-        default:
-            return "mp4"
-        }
     }
 
     private func finish(_ result: Result<URL, Error>) {
