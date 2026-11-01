@@ -58,7 +58,7 @@ enum WebMediaError: LocalizedError {
 /// Not a site-specific extractor: pages that hide the file behind scripts,
 /// DRM or a streaming playlist (HLS/DASH) will report "nothing found".
 /// Every callback arrives on the main thread.
-final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
+final class WebMediaDownloader: NSObject {
     static let mediaExtensions: Set<String> = [
         "mp4", "m4v", "mov", "webm", "mkv",
         "mp3", "m4a", "aac", "wav", "flac", "ogg", "opus"
@@ -91,8 +91,109 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
     private var progress: ((Double) -> Void)?
     private var completion: ((Result<URL, Error>) -> Void)?
 
-    // MARK: - Static helpers
+    // MARK: - Public API
 
+    func start(
+        link: String,
+        progress: @escaping (Double) -> Void,
+        completion: @escaping (Result<URL, Error>) -> Void
+    ) {
+        self.progress = progress
+        self.completion = completion
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = url.host?.lowercased() else {
+            finish(.failure(WebMediaError.invalidURL))
+            return
+        }
+        if Self.blockedHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) }) {
+            finish(.failure(WebMediaError.useMainApp))
+            return
+        }
+        if Self.mediaExtensions.contains(url.pathExtension.lowercased()) {
+            candidates = [url]
+            next()
+            return
+        }
+        let page = WebPageFetcher(url: url)
+        fetcher = page
+        page.run { [weak self] outcome in
+            self?.handle(outcome, pageURL: url)
+        }
+    }
+
+    func cancel() {
+        isCancelled = true
+        fetcher?.cancel()
+        task?.cancel()
+        session?.invalidateAndCancel()
+        completion = nil
+    }
+
+    // MARK: - Page → candidates
+
+    private func handle(_ outcome: WebPageFetcher.Outcome, pageURL: URL) {
+        switch outcome {
+        case .failure(let error):
+            finish(.failure(error))
+        case .media(let url):
+            candidates = [url]
+            next()
+        case let .page(html, finalURL):
+            referer = finalURL
+            let links = Self.mediaLinks(in: html, base: finalURL)
+            let playable = links.filter { !Self.isPlaylist($0) }
+            if playable.isEmpty {
+                finish(.failure(
+                    links.isEmpty ? WebMediaError.noMedia : WebMediaError.streamOnly
+                ))
+                return
+            }
+            candidates = playable
+            next()
+        }
+    }
+
+    // MARK: - Transfer
+
+    private func next() {
+        guard !isCancelled else {
+            return
+        }
+        guard !candidates.isEmpty else {
+            finish(.failure(lastFailure ?? WebMediaError.noMedia))
+            return
+        }
+        let url = candidates.removeFirst()
+        session?.invalidateAndCancel()
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        let newSession = URLSession(
+            configuration: config, delegate: self, delegateQueue: .main
+        )
+        session = newSession
+        var request = URLRequest(url: url)
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        if let referer {
+            request.setValue(referer.absoluteString, forHTTPHeaderField: "Referer")
+        }
+        let job = newSession.downloadTask(with: request)
+        task = job
+        job.resume()
+    }
+
+    private func finish(_ result: Result<URL, Error>) {
+        let callback = completion
+        completion = nil
+        session?.finishTasksAndInvalidate()
+        DispatchQueue.main.async { callback?(result) }
+}
+
+// MARK: - Helpers
+
+extension WebMediaDownloader {
     private static func isPlaylist(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()
         return ext == "m3u8" || ext == "mpd"
@@ -158,99 +259,45 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
         }
     }
 
-    // MARK: - Public API
+    // MARK: - Saving
 
-    func start(
-        link: String,
-        progress: @escaping (Double) -> Void,
-        completion: @escaping (Result<URL, Error>) -> Void
-    ) {
-        self.progress = progress
-        self.completion = completion
-        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https",
-              let host = url.host?.lowercased() else {
-            finish(.failure(WebMediaError.invalidURL))
-            return
+    private func store(_ location: URL, response: HTTPURLResponse) throws -> URL {
+        let manager = FileManager.default
+        let name = fileName(for: response)
+        let nameURL = URL(fileURLWithPath: name)
+        var destination = Self.folder.appendingPathComponent(name)
+        var index = 1
+        while manager.fileExists(atPath: destination.path) {
+            let base = nameURL.deletingPathExtension().lastPathComponent
+            let ext = nameURL.pathExtension
+            destination = Self.folder.appendingPathComponent(
+                "\(base)-\(index)" + (ext.isEmpty ? "" : ".\(ext)")
+            )
+            index += 1
         }
-        if Self.blockedHosts.contains(where: { host == $0 || host.hasSuffix("." + $0) }) {
-            finish(.failure(WebMediaError.useMainApp))
-            return
-        }
-        if Self.mediaExtensions.contains(url.pathExtension.lowercased()) {
-            candidates = [url]
-            next()
-            return
-        }
-        let page = WebPageFetcher(url: url)
-        fetcher = page
-        page.run { [weak self] outcome in
-            self?.handle(outcome, pageURL: url)
-        }
+        try manager.moveItem(at: location, to: destination)
+        return destination
     }
 
-    func cancel() {
-        isCancelled = true
-        fetcher?.cancel()
-        task?.cancel()
-        session?.invalidateAndCancel()
-        completion = nil
+    private func fileName(for response: HTTPURLResponse) -> String {
+        let banned = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.newlines)
+        var name = (response.suggestedFilename ?? "media")
+            .components(separatedBy: banned)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        if name.isEmpty {
+            name = "media"
+        }
+        if URL(fileURLWithPath: name).pathExtension.isEmpty {
+            name += "." + Self.fileExtension(forMime: response.mimeType)
+        }
+        return String(name.suffix(100))
     }
+}
 
-    // MARK: - Page → candidates
+// MARK: - URLSession delegate
 
-    private func handle(_ outcome: WebPageFetcher.Outcome, pageURL: URL) {
-        switch outcome {
-        case .failure(let error):
-            finish(.failure(error))
-        case .media(let url):
-            candidates = [url]
-            next()
-        case .page(let html, let finalURL):
-            referer = finalURL
-            let links = Self.mediaLinks(in: html, base: finalURL)
-            let playable = links.filter { !Self.isPlaylist($0) }
-            if playable.isEmpty {
-                finish(.failure(
-                    links.isEmpty ? WebMediaError.noMedia : WebMediaError.streamOnly
-                ))
-                return
-            }
-            candidates = playable
-            next()
-        }
-    }
-
-    // MARK: - Transfer
-
-    private func next() {
-        guard !isCancelled else {
-            return
-        }
-        guard !candidates.isEmpty else {
-            finish(.failure(lastFailure ?? WebMediaError.noMedia))
-            return
-        }
-        let url = candidates.removeFirst()
-        session?.invalidateAndCancel()
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        let newSession = URLSession(
-            configuration: config, delegate: self, delegateQueue: .main
-        )
-        session = newSession
-        var request = URLRequest(url: url)
-        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
-        if let referer {
-            request.setValue(referer.absoluteString, forHTTPHeaderField: "Referer")
-        }
-        let job = newSession.downloadTask(with: request)
-        task = job
-        job.resume()
-    }
-
+extension WebMediaDownloader: URLSessionDownloadDelegate {
     func urlSession(
         _ session: URLSession,
         downloadTask: URLSessionDownloadTask,
@@ -306,48 +353,8 @@ final class WebMediaDownloader: NSObject, URLSessionDownloadDelegate {
         }
         next()
     }
-
-    // MARK: - Saving
-
-    private func store(_ location: URL, response: HTTPURLResponse) throws -> URL {
-        let manager = FileManager.default
-        let name = fileName(for: response)
-        var destination = Self.folder.appendingPathComponent(name)
-        var index = 1
-        while manager.fileExists(atPath: destination.path) {
-            let base = (name as NSString).deletingPathExtension
-            let ext = (name as NSString).pathExtension
-            destination = Self.folder.appendingPathComponent(
-                "\(base)-\(index)" + (ext.isEmpty ? "" : ".\(ext)")
-            )
-            index += 1
-        }
-        try manager.moveItem(at: location, to: destination)
-        return destination
-    }
-
-    private func fileName(for response: HTTPURLResponse) -> String {
-        let banned = CharacterSet(charactersIn: "/\\:*?\"<>|").union(.newlines)
-        var name = (response.suggestedFilename ?? "media")
-            .components(separatedBy: banned)
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespaces)
-        if name.isEmpty {
-            name = "media"
-        }
-        if (name as NSString).pathExtension.isEmpty {
-            name += "." + Self.fileExtension(forMime: response.mimeType)
-        }
-        return String(name.suffix(100))
-    }
-
-    private func finish(_ result: Result<URL, Error>) {
-        let callback = completion
-        completion = nil
-        session?.finishTasksAndInvalidate()
-        DispatchQueue.main.async { callback?(result) }
-    }
 }
+
 
 /// Reads the start of a page, and stops early when the address turns out to
 /// be the media file itself.
