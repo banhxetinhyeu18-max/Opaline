@@ -6,8 +6,16 @@ struct DownloadOption {
     let height: Int
     let video: DashFormatInfo
     let audio: DashFormatInfo
+    /// "Download audio (M4A)": only the audio track is fetched and the job
+    /// ends in a standalone .m4a instead of a saved video. `video` is then
+    /// just a copy of `audio` and is never downloaded.
+    var audioOnly: Bool = false
 
-    var bytes: Int64 { video.contentLength + audio.contentLength }
+    var bytes: Int64 {
+        audioOnly
+            ? audio.contentLength
+            : video.contentLength + audio.contentLength
+    }
 }
 
 /// Downloads videos for offline watching: the video track and the audio track
@@ -107,7 +115,15 @@ final class VideoDownloader {
             return
         }
         DownloadStore.clearFailure(video.id)
-        saveMetadata(for: video)
+        if option.audioOnly {
+            // A throwaway job: just the card with its picture, no page,
+            // comments or subtitles to fetch for a file that is deleted
+            // as soon as it has been handed to the share sheet.
+            DownloadStore.save(video)
+            fetchThumbnail(for: video)
+        } else {
+            saveMetadata(for: video)
+        }
         jobs.append(
             Job(video: video, option: option, completion: completion)
         )

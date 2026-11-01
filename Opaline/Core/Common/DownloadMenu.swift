@@ -34,7 +34,8 @@ enum DownloadMenu {
                     from: presenter,
                     anchor: anchor,
                     titleKey: "player.action.download"
-                )
+                ),
+                audioDownloadItem(video, from: presenter, anchor: anchor)
             ]
         }
     }
@@ -53,6 +54,7 @@ enum DownloadMenu {
                 anchor: anchor,
                 titleKey: "downloads.retry"
             ),
+            audioDownloadItem(video, from: presenter, anchor: anchor),
             deleteItem(video.id, from: presenter)
         ]
     }

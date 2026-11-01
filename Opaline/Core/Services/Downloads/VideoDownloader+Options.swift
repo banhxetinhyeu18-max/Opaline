@@ -3,6 +3,33 @@ import Foundation
 // MARK: - Rendition picking
 
 extension VideoDownloader {
+    /// Same server round trip as `options(for:)`, answering with the
+    /// audio-only entry instead of the video renditions.
+    func audioOption(
+        for videoId: String,
+        completion: @escaping (Result<DownloadOption, Error>) -> Void
+    ) {
+        apiClient.fetchDirectPlayback(
+            videoId: videoId,
+            client: client,
+            poToken: nil,
+            cancellationToken: nil
+        ) { result in
+            switch result {
+            case .success(let info):
+                if let option = Self.audioOption(in: info) {
+                    completion(.success(option))
+                } else {
+                    completion(.failure(DownloadError.noTracks))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+}
+
+extension VideoDownloader {
     /// H.264 video paired with the original-language AAC audio.
     ///
     /// AV1 and VP9 are left out on purpose: `AVAssetExportSession` will not
@@ -41,7 +68,7 @@ extension VideoDownloader {
     /// judges it. A saved copy holds one audio track, so it has to be the one
     /// this person would have heard: downloading the original of an English
     /// video that plays back in Russian gives them a file they cannot watch.
-    private static func audioFormat(
+    static func audioFormat(
         in info: DirectPlaybackInfo
     ) -> DashFormatInfo? {
         let mp4 = info.allDashAudioFormats.filter {
@@ -60,6 +87,21 @@ extension VideoDownloader {
             AppLog.downloads("saving the \(dubbed.audioTrackId ?? "?") dub")
         }
         return dubbed ?? original ?? mp4.first ?? fallback
+    }
+
+    /// The single audio-only entry: the same AAC track a video download
+    /// would carry, saved on its own.
+    static func audioOption(in info: DirectPlaybackInfo) -> DownloadOption? {
+        guard let audio = audioFormat(in: info) else {
+            return nil
+        }
+        return DownloadOption(
+            label: "M4A",
+            height: 0,
+            video: audio,
+            audio: audio,
+            audioOnly: true
+        )
     }
 
     private static func track(_ format: DashFormatInfo) -> AudioTrack? {
