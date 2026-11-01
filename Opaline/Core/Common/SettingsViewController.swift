@@ -11,7 +11,7 @@ final class SettingsViewController: UIViewController {
         case appLanguage, region
         case quality, qualityCellular
         case backgroundPlayback, pipEnabled, hideStatusBar
-        case downloadQuality, downloadComments, downloadCaptions
+        case downloadQuality, downloadComments, downloadCaptions, webDownload
         case showShorts, shortsPlayer, shortsGrouping
         case autoZoomToFill
         case autoplayEnabled, autoplayMixEnabled
@@ -237,6 +237,10 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
                 "settings.row.downloadCaptions".localized,
                 value: DownloadPreferences.captionsDisplayName
             )
+        case .webDownload:
+            return makeDisclosureCell(
+                WebMediaText.text("Download from link", "Tải từ liên kết")
+            )
         case .backgroundPlayback:
             let bgOn = BackgroundPlaybackService.isEnabled
             return makeToggleCell(
@@ -432,6 +436,10 @@ extension SettingsViewController: UITableViewDataSource, UITableViewDelegate {
             showDownloadCommentsPicker()
         case .downloadCaptions:
             showDownloadCaptionsPicker()
+        case .webDownload:
+            navigationController?.pushViewController(
+                WebDownloadViewController(), animated: true
+            )
         default:
             return false
         }

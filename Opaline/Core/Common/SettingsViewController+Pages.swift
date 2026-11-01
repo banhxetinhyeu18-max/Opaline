@@ -111,6 +111,14 @@ extension SettingsViewController {
                 header: nil,
                 footer: "settings.footer.downloads".localized,
                 rows: [.downloadQuality, .downloadComments, .downloadCaptions]
+            ),
+            Section(
+                header: nil,
+                footer: WebMediaText.text(
+                    "Save a video or audio file from a direct link or another website.",
+                    "Tải video hoặc âm thanh từ liên kết trực tiếp hoặc trang web khác."
+                ),
+                rows: [.webDownload]
             )
         ]
     }

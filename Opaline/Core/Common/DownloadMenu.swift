@@ -19,6 +19,7 @@ enum DownloadMenu {
         case .ready:
             return [
                 exportItem(video, from: presenter, anchor: anchor),
+                audioExportItem(video, from: presenter, anchor: anchor),
                 deleteItem(video.id, from: presenter)
             ]
         case .queued, .running:
