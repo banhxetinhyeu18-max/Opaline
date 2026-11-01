@@ -190,6 +190,7 @@ final class WebMediaDownloader: NSObject {
         completion = nil
         session?.finishTasksAndInvalidate()
         DispatchQueue.main.async { callback?(result) }
+    }
 }
 
 // MARK: - Helpers
