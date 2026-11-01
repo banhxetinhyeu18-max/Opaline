@@ -184,3 +184,5 @@ final class WebDownloadViewController: UIViewController, UITextFieldDelegate {
         }
     }
 }
+
+// swiftlint:enable all

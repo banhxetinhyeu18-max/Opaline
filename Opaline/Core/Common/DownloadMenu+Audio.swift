@@ -51,3 +51,5 @@ extension DownloadMenu {
         }
     }
 }
+
+// swiftlint:enable all

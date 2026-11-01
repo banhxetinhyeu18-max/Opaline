@@ -1044,3 +1044,5 @@ enum VideoQualityStore {
         UserDefaults.standard.set(quality, forKey: key)
     }
 }
+
+// swiftlint:enable all

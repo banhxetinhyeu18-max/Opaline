@@ -202,3 +202,5 @@ enum DownloadMenu {
         return formatter.string(fromByteCount: bytes)
     }
 }
+
+// swiftlint:enable all

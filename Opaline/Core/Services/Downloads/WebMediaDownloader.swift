@@ -463,3 +463,5 @@ final class WebPageFetcher: NSObject, URLSessionDataDelegate {
         callback?(outcome)
     }
 }
+
+// swiftlint:enable all

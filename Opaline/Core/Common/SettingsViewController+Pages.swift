@@ -252,3 +252,5 @@ extension SettingsViewController {
         Self.rowPages[row]
     }
 }
+
+// swiftlint:enable all
