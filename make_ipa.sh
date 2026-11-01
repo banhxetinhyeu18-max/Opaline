@@ -30,7 +30,7 @@ xcodebuild \
   ${XCODEBUILD_EXTRA_ARGS:-} \
   build \
   > "$BUILD_LOG" 2>&1 || true
-grep -E "error:|warning:" "$BUILD_LOG" | tail -40 || true
+grep -E "[.]swift:[0-9]+:[0-9]+: error:" "$BUILD_LOG" | cut -c1-400 | sort -u | head -40 || true
 if ! grep -q "BUILD SUCCEEDED" "$BUILD_LOG"; then
   echo "❌ Build failed — full log: $BUILD_LOG"
   tail -30 "$BUILD_LOG"
