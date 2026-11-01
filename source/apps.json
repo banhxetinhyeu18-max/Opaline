@@ -12,6 +12,14 @@
       "subtitle": "YouTube client for iOS 12+",
       "versions": [
         {
+          "version": "1.12.1",
+          "date": "2026-11-01T13:28:17Z",
+          "localizedDescription": "**Full Changelog**: https://github.com/banhxetinhyeu18-max/Opaline/compare/1.12.0...1.12.1",
+          "downloadURL": "https://github.com/banhxetinhyeu18-max/Opaline/releases/download/1.12.1/Opaline_1.12.1.ipa",
+          "size": 6730740,
+          "minOSVersion": "12.0"
+        },
+        {
           "version": "1.12.0",
           "date": "2026-11-01T13:03:43Z",
           "localizedDescription": "**Full Changelog**: https://github.com/banhxetinhyeu18-max/Opaline/commits/1.12.0",
@@ -204,14 +212,14 @@
           "minOSVersion": "12.0"
         }
       ],
-      "version": "1.12.0",
-      "versionDate": "2026-11-01T13:03:43Z",
-      "versionDescription": "**Full Changelog**: https://github.com/banhxetinhyeu18-max/Opaline/commits/1.12.0",
-      "downloadURL": "https://github.com/banhxetinhyeu18-max/Opaline/releases/download/1.12.0/Opaline_1.12.0.ipa",
+      "version": "1.12.1",
+      "versionDate": "2026-11-01T13:28:17Z",
+      "versionDescription": "**Full Changelog**: https://github.com/banhxetinhyeu18-max/Opaline/compare/1.12.0...1.12.1",
+      "downloadURL": "https://github.com/banhxetinhyeu18-max/Opaline/releases/download/1.12.1/Opaline_1.12.1.ipa",
       "localizedDescription": "A lightweight YouTube client for iOS 12+. No ads, no tracking. Features: SponsorBlock, Return YouTube Dislike, 1080p playback, background audio, PiP, subtitles, and more.",
       "iconURL": "https://raw.githubusercontent.com/verback2308/YTLite/main/source/icon.png",
       "tintColor": "FF0000",
-      "size": 6717733,
+      "size": 6730740,
       "category": "entertainment",
       "minOSVersion": "12.0",
       "screenshots": [
@@ -234,6 +242,15 @@
   "iconURL": "https://raw.githubusercontent.com/verback2308/YTLite/main/source/icon.png",
   "tintColor": "FF0000",
   "news": [
+    {
+      "title": "Opaline 1.12.1",
+      "identifier": "release-1.12.1",
+      "caption": "Update available — see what's new.",
+      "date": "2026-11-01T13:28:17Z",
+      "tintColor": "FF0000",
+      "appID": "com.verback.YTLite",
+      "url": "https://github.com/banhxetinhyeu18-max/Opaline/releases/tag/1.12.1"
+    },
     {
       "title": "Opaline 1.12.0",
       "identifier": "release-1.12.0",
