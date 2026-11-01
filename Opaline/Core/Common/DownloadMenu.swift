@@ -142,7 +142,7 @@ enum DownloadMenu {
         from presenter: UIViewController,
         anchor: UIView?
     ) {
-        let items = options.map { option in
+        var items = options.map { option in
             PlayerMenuItem(
                 title: "\(option.label) · \(sizeText(option.bytes))",
                 iconName: "icon_download"
@@ -150,6 +150,16 @@ enum DownloadMenu {
                 start(video, option: option, from: presenter)
             }
         }
+        // Audio only, last in the list; every rendition carries the same
+        // audio track, so the first one says how big it is.
+        items.append(
+            audioQualityItem(
+                video,
+                bytes: options.first?.audio.contentLength ?? 0,
+                from: presenter,
+                anchor: anchor
+            )
+        )
         let host = VideoActionMenu.menuHost(presenter)
         PlayerMenuOverlay.show(
             in: host,

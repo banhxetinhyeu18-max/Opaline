@@ -35,10 +35,24 @@ extension DownloadMenu {
         }
     }
 
+    /// The same action as a row in the quality sheet, below the video sizes.
+    static func audioQualityItem(
+        _ video: Video,
+        bytes: Int64,
+        from presenter: UIViewController,
+        anchor: UIView?
+    ) -> PlayerMenuItem {
+        let name = WebMediaText.text("Audio only (M4A)", "Chỉ âm thanh (M4A)")
+        let title = bytes > 0 ? "\(name) · \(sizeText(bytes))" : name
+        return PlayerMenuItem(title: title, iconName: "icon_download") {
+            downloadAudio(video, from: presenter, anchor: anchor)
+        }
+    }
+
     static func downloadAudio(
         _ video: Video,
         from presenter: UIViewController,
-        anchor: UIView
+        anchor: UIView?
     ) {
         guard !DownloadStatus.of(video.id).isActive else {
             audioToast(
@@ -72,7 +86,7 @@ extension DownloadMenu {
         _ video: Video,
         option: DownloadOption,
         from presenter: UIViewController,
-        anchor: UIView
+        anchor: UIView?
     ) {
         VideoDownloader.shared.start(video: video, option: option) { result in
             switch result {
@@ -92,7 +106,7 @@ extension DownloadMenu {
     private static func shareAudio(
         _ file: URL,
         from presenter: UIViewController,
-        anchor: UIView
+        anchor: UIView?
     ) {
         let host = presenter.viewIfLoaded?.window != nil
             ? presenter
@@ -103,7 +117,7 @@ extension DownloadMenu {
         let activity = UIActivityViewController(
             activityItems: [file], applicationActivities: nil
         )
-        if anchor.window != nil {
+        if let anchor = anchor, anchor.window != nil {
             VideoActionMenu.anchorPopover(activity, to: anchor)
         } else if let popover = activity.popoverPresentationController {
             popover.sourceView = host.view
